@@ -1,0 +1,28 @@
+# Build
+dist/
+build/
+*.spec
+*.msix
+*.appx
+*.pfx
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Dati utente (non devono finire nel repo)
+ingresso/
+conversioni/
+log/
+*.log
+settings.json
+
+# Asset generati (si rigenerano con make_assets.py)
+# assets/
+
+# Sicurezza: certificati e log
+*.cer
+*.pfx
+*.log

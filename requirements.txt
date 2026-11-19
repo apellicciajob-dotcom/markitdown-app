@@ -1,0 +1,5 @@
+markitdown[all]
+customtkinter
+tkinterdnd2
+pillow
+pyinstaller
