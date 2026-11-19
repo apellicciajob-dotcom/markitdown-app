@@ -2,6 +2,23 @@
 
 App desktop per Windows che converte PDF, Word, Excel, PowerPoint, EPUB, testo, log e codice in **Markdown**, basata su [MarkItDown](https://github.com/microsoft/markitdown) e [customtkinter](https://github.com/TomSchimansky/CustomTkinter).
 
+## Download e installazione
+
+1. Scarica **[MarkItDownApp-v1.2.0-win64.zip](https://github.com/apellicciajob-dotcom/markitdown-app/releases/download/v1.2.0/MarkItDownApp-v1.2.0-win64.zip)** (circa 117 MB) dalla pagina [Releases](https://github.com/apellicciajob-dotcom/markitdown-app/releases/latest). Requisiti: Windows 10/11 a 64 bit; non serve installare Python né altro.
+2. Tasto destro sullo zip → **Estrai tutto…** in una cartella qualsiasi.
+3. Apri `MarkItDownApp\MarkItDownApp.exe`. Non spostare il solo `.exe`: deve restare nella sua cartella insieme a `_internal`. Per un'icona sul Desktop: tasto destro → *Invia a* → *Desktop (crea collegamento)*.
+
+Se Windows SmartScreen mostra "Windows ha protetto il PC" (l'app non e' ancora firmata): **Ulteriori informazioni → Esegui comunque**.
+
+## Uso rapido
+
+- **Incolla dagli appunti (`Ctrl+V`)**: il testo diventa `appunti_AAAAMMGG_HHMMSS` e viene convertito subito; la riga e' evidenziata in giallo ocra.
+- **Trascina i file** nella zona tratteggiata oppure usa **Seleziona file…**.
+- **Avvia/Pausa Watch**: converte automaticamente i file messi nella cartella *ingresso*.
+- **Anteprima** al centro (*Copia Markdown*, *Svuota*); a destra la lista **Conversioni** con *Apri*, copia ed elimina per ogni file.
+- Cartelle, tema e avvio automatico del Watch si cambiano da **Impostazioni**.
+- Disinstallazione: elimina la cartella `MarkItDownApp` (e, se vuoi, i dati in `Documenti\MarkItDownApp` e `%LOCALAPPDATA%\MarkItDownApp`).
+
 ## Funzioni
 
 - **Drag & Drop** dei file nella finestra (o selezione multipla con il file picker)
