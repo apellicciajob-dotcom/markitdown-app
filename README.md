@@ -1,4 +1,4 @@
-# MarkItDown App
+# ApexCore - MarkItDown Avanzato
 
 App desktop per Windows che converte PDF, Word, Excel, PowerPoint, EPUB, testo, log e codice in **Markdown**, basata su [MarkItDown](https://github.com/microsoft/markitdown) e [customtkinter](https://github.com/TomSchimansky/CustomTkinter).
 
@@ -7,6 +7,8 @@ App desktop per Windows che converte PDF, Word, Excel, PowerPoint, EPUB, testo, 
 - **Drag & Drop** dei file nella finestra (o selezione multipla con il file picker)
 - **Incolla dagli appunti** (`Ctrl+V`): il testo diventa un `.log` con timestamp in *ingresso* ed è subito convertito in `.md`
 - **Watch** della cartella di ingresso con debounce su dimensione/mtime: i file appena creati sono sempre convertiti
+- Pulsante **Incolla dagli appunti** in primo piano, evidenziazione giallo ocra del testo appena incollato e toast di conferma
+- **Lista live** della cartella conversioni con azioni Apri / Copia / Elimina per riga
 - **Anteprima Markdown**, cronologia, *Copia Markdown*, apertura cartelle, tema Chiaro/Scuro/Sistema
 - Nessuna sovrascrittura: se esiste già `nome.md` si crea `nome_1.md`, `nome_2.md`, …
 

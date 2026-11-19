@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,7 +29,7 @@ try:
 except Exception:  # noqa: BLE001 - fallback al file picker
     HAS_DND = False
 
-APP_TITLE = "MarkItDown App"
+APP_TITLE = "ApexCore - MarkItDown Avanzato"
 ACCENT = ("#0067C0", "#4CC2FF")        # blu Windows 11 (chiaro, scuro)
 CARD = ("#FFFFFF", "#2B2B2B")
 BG = ("#F3F3F3", "#202020")
@@ -37,6 +38,24 @@ OK_COL = ("#0F7B0F", "#6CCB5F")
 ERR_COL = ("#C42B1C", "#FF99A4")
 FONT = "Segoe UI"
 MAX_PREVIEW = 300_000
+OCRA = ("#F5D77F", "#D9A520")          # evidenziazione testo incollato dagli appunti
+OCRA_PREV = ("#FFF4CC", "#3A2F12")     # sfondo tenue della textbox Anteprima
+OCRA_PREV_TXT = ("#1A1A1A", "#F5E6B8")
+PREV_BG = ("#FAFAFA", "#1F1F1F")
+OCRA_TXT = "#1F1600"                   # testo scuro, leggibile su entrambi gli ocra
+TXT = ("#1A1A1A", "#F2F2F2")
+BTN2 = ("#E6E6E6", "#383838")
+BTN2_H = ("#D6D6D6", "#454545")
+APPUNTI_RE = re.compile(r"^appunti_\d{8}_(\d{2})(\d{2})(\d{2})(?:_\d+)?\.md$", re.I)
+
+
+def e_appunti(p: Path) -> bool:
+    return bool(APPUNTI_RE.match(p.name))
+
+
+def ora_appunti(p: Path) -> str:
+    m = APPUNTI_RE.match(p.name)
+    return f"{m.group(1)}:{m.group(2)}:{m.group(3)}" if m else ""
 
 
 def risorsa(rel: str) -> Path:
@@ -72,6 +91,10 @@ class App(_BaseWindow):
         self.ultimo_md: Path | None = None   # file mostrato in anteprima
         self._firma_files: tuple = ()
         self._tick = 0
+        self._icone: dict = {}
+        self._toast_job = None
+        self._scroll_top = False
+        self.appunto_nuovo: Path | None = None   # unico file appena incollato (sessione)
         self.n_ok = self.n_err = 0
 
         self.title(APP_TITLE)
@@ -95,12 +118,64 @@ class App(_BaseWindow):
 
     # ------------------------------------------------------------------ UI
     def _icona(self) -> None:
-        ico = risorsa("assets/icon.ico")
+        ico = risorsa("assets/apexcore_icon.ico")
+        if not ico.exists():
+            ico = risorsa("assets/icon.ico")
         if ico.exists():
             try:
                 self.after(250, lambda: self.iconbitmap(str(ico)))
             except tk.TclError:
                 pass
+
+    def _ico(self, nome: str):
+        """CTkImage colorata 18x18 (sorgente @2x se presente); None se mancante."""
+        if nome in self._icone:
+            return self._icone[nome]
+        img = None
+        for f in (f"assets/icons/{nome}@2x.png", f"assets/icons/{nome}.png"):
+            pth = risorsa(f)
+            if pth.exists():
+                try:
+                    from PIL import Image
+                    im = Image.open(pth).convert("RGBA")
+                    img = ctk.CTkImage(light_image=im, dark_image=im, size=(18, 18))
+                except Exception as exc:  # noqa: BLE001
+                    logging.warning("Icona %s non caricabile: %s", nome, exc)
+                break
+        self._icone[nome] = img
+        return img
+
+    def _banner(self):
+        """Logo ApexCore (pillola) mostrato in cima alla colonna sinistra."""
+        pth = risorsa("assets/brand_banner.png")
+        if not pth.exists():
+            return None
+        try:
+            from PIL import Image
+            im = Image.open(pth).convert("RGBA")
+            w = 262
+            return ctk.CTkImage(light_image=im, dark_image=im,
+                                size=(w, round(w * im.height / im.width)))
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("Banner non caricabile: %s", exc)
+            return None
+
+    def _toast(self, msg: str, ms: int = 1200) -> None:
+        """Popup non bloccante al centro della finestra; il timer precedente viene annullato."""
+        if self._toast_job is not None:
+            try:
+                self.after_cancel(self._toast_job)
+            except (ValueError, tk.TclError):
+                pass
+            self._toast_job = None
+        self.lbl_toast.configure(text=msg)
+        self.lbl_toast.place(relx=0.5, rely=0.5, anchor="center")
+        self.lbl_toast.lift()
+        self._toast_job = self.after(ms, self._chiudi_toast)
+
+    def _chiudi_toast(self) -> None:
+        self._toast_job = None
+        self.lbl_toast.place_forget()
 
     def _card(self, parent, **kw) -> ctk.CTkFrame:
         return ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12,
@@ -116,10 +191,15 @@ class App(_BaseWindow):
         sx.grid_propagate(False)
         sx.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(sx, text="MarkItDown", font=(FONT, 26, "bold")).grid(
-            row=0, column=0, sticky="w", padx=4)
-        ctk.CTkLabel(sx, text="Converti tutto in Markdown", font=(FONT, 13),
-                     text_color=MUTED).grid(row=1, column=0, sticky="w", padx=4, pady=(0, 12))
+        banner = self._banner()
+        if banner is not None:
+            ctk.CTkLabel(sx, text="", image=banner).grid(
+                row=0, column=0, rowspan=2, sticky="w", pady=(0, 14))
+        else:  # fallback testuale se l'asset manca
+            ctk.CTkLabel(sx, text="ApexCore", font=(FONT, 26, "bold")).grid(
+                row=0, column=0, sticky="w", padx=4)
+            ctk.CTkLabel(sx, text="MarkItDown Avanzato", font=(FONT, 13),
+                         text_color=MUTED).grid(row=1, column=0, sticky="w", padx=4, pady=(0, 12))
 
         self.drop = ctk.CTkFrame(sx, fg_color=CARD, corner_radius=14, height=190,
                                  border_width=2, border_color=ACCENT)
@@ -136,21 +216,27 @@ class App(_BaseWindow):
                      font=(FONT, 11), text_color=MUTED, wraplength=250).grid(
             row=3, column=0, sticky="n", pady=(2, 0))
 
-        def btn(row, text, cmd, primary=False):
+        def btn(row, text, cmd, primary=False, icona=None, altezza=40):
             b = ctk.CTkButton(
-                sx, text=text, command=cmd, height=40, corner_radius=8,
-                font=(FONT, 14),
-                fg_color=ACCENT if primary else ("#E6E6E6", "#383838"),
-                hover_color=("#005A9E", "#6CD0FF") if primary else ("#D6D6D6", "#454545"),
-                text_color=("#FFFFFF", "#000000") if primary else ("#1A1A1A", "#F2F2F2"))
+                sx, text=text, command=cmd, height=altezza, corner_radius=8,
+                font=(FONT, 15 if primary else 14, "bold" if primary else "normal"),
+                image=self._ico(icona) if icona else None, compound="left",
+                anchor="center",
+                fg_color=ACCENT if primary else BTN2,
+                hover_color=("#005A9E", "#6CD0FF") if primary else BTN2_H,
+                text_color=("#FFFFFF", "#000000") if primary else TXT)
             b.grid(row=row, column=0, sticky="ew", pady=(10, 0))
             return b
 
-        btn(3, "📂  Seleziona file…", self.scegli_file, primary=True)
-        btn(4, "📋  Incolla dagli appunti  (Ctrl+V)", self.incolla)
+        # ordine: Incolla (primario) sopra Seleziona file
+        self.btn_incolla = btn(3, "  Incolla dagli appunti  (Ctrl+V)", self.incolla,
+                               primary=True, icona="incolla", altezza=48)
+        self.btn_scegli = btn(4, "  Seleziona file…", self.scegli_file, icona="file")
         self.btn_watch = btn(5, "", self.toggle_watch)
-        btn(6, "📁  Apri cartella conversioni", lambda: self._apri(self.settings.conversioni))
-        btn(7, "📥  Apri cartella ingresso", lambda: self._apri(self.settings.ingresso))
+        btn(6, "  Apri cartella conversioni", lambda: self._apri(self.settings.conversioni),
+            icona="cartella")
+        btn(7, "  Apri cartella ingresso", lambda: self._apri(self.settings.ingresso),
+            icona="ingresso")
 
         sx.grid_rowconfigure(8, weight=1)
         self.lbl_stato = ctk.CTkLabel(sx, text="", font=(FONT, 12), text_color=MUTED,
@@ -177,9 +263,9 @@ class App(_BaseWindow):
         self.lbl_nfile = ctk.CTkLabel(testa, text="Conversioni", font=(FONT, 16, "bold"),
                                       anchor="w")
         self.lbl_nfile.grid(row=0, column=0, sticky="ew")
-        ctk.CTkButton(testa, text="↻", width=32, height=32, font=(FONT, 16),
-                      fg_color=("#E6E6E6", "#383838"), hover_color=("#D6D6D6", "#454545"),
-                      text_color=("#1A1A1A", "#F2F2F2"),
+        ctk.CTkButton(testa, text="" if self._ico("aggiorna") else "↻", width=32, height=32,
+                      image=self._ico("aggiorna"), fg_color=BTN2, hover_color=BTN2_H,
+                      text_color=TXT,
                       command=self._ridisegna_files).grid(row=0, column=1)
         self.lista_md = ctk.CTkScrollableFrame(dx, fg_color="transparent")
         self.lista_md.grid(row=1, column=0, sticky="nsew", padx=6, pady=(0, 8))
@@ -188,23 +274,25 @@ class App(_BaseWindow):
         # Anteprima
         t_prev.grid_columnconfigure(0, weight=1)
         t_prev.grid_rowconfigure(1, weight=1)
-        barra = ctk.CTkFrame(t_prev, fg_color="transparent")
+        self.barra = ctk.CTkFrame(t_prev, fg_color="transparent", corner_radius=8)
+        barra = self.barra
         barra.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         barra.grid_columnconfigure(0, weight=1)
         self.lbl_file = ctk.CTkLabel(barra, text="Nessuna conversione", font=(FONT, 13, "bold"),
-                                     anchor="w")
-        self.lbl_file.grid(row=0, column=0, sticky="ew")
-        self.btn_copia = ctk.CTkButton(barra, text="Copia Markdown", width=140, height=32,
+                                     anchor="w", text_color=TXT)
+        self.lbl_file.grid(row=0, column=0, sticky="ew", padx=(8, 0), pady=4)
+        self.btn_copia = ctk.CTkButton(barra, text=" Copia Markdown", width=150, height=32,
+                                       image=self._ico("copia"), compound="left",
                                        command=self.copia_md, fg_color=ACCENT,
                                        text_color=("#FFFFFF", "#000000"),
                                        hover_color=("#005A9E", "#6CD0FF"))
-        self.btn_copia.grid(row=0, column=1, padx=(8, 0))
-        ctk.CTkButton(barra, text="Svuota", width=80, height=32,
-                      fg_color=("#E6E6E6", "#383838"), hover_color=("#D6D6D6", "#454545"),
-                      text_color=("#1A1A1A", "#F2F2F2"),
-                      command=self.svuota_anteprima).grid(row=0, column=2, padx=(8, 0))
+        self.btn_copia.grid(row=0, column=1, padx=(8, 0), pady=4)
+        ctk.CTkButton(barra, text=" Svuota", width=90, height=32,
+                      image=self._ico("svuota"), compound="left",
+                      fg_color=BTN2, hover_color=BTN2_H, text_color=TXT,
+                      command=self.svuota_anteprima).grid(row=0, column=2, padx=(8, 4), pady=4)
         self.preview = ctk.CTkTextbox(t_prev, font=("Cascadia Mono", 13), wrap="word",
-                                      fg_color=("#FAFAFA", "#1F1F1F"), corner_radius=8)
+                                      fg_color=PREV_BG, text_color=TXT, corner_radius=8)
         self.preview.grid(row=1, column=0, sticky="nsew")
         tb = self.preview._textbox
         tb.tag_config("h", font=("Segoe UI", 15, "bold"), foreground="#0067C0")
@@ -248,6 +336,10 @@ class App(_BaseWindow):
                       variable=self.var_auto, command=self._salva_auto,
                       progress_color=ACCENT).grid(row=4, column=0, columnspan=3,
                                                   sticky="w", pady=12, padx=4)
+
+        self.lbl_toast = ctk.CTkLabel(
+            self, text="", font=(FONT, 17, "bold"), corner_radius=14, height=52,
+            fg_color=("#0F6A0F", "#0E5C0E"), text_color="#FFFFFF", padx=26)
 
     def _riga_cartella(self, parent, riga, etichetta, var, attr) -> None:
         ctk.CTkLabel(parent, text=etichetta).grid(row=riga, column=0, sticky="w", pady=8, padx=4)
@@ -302,7 +394,7 @@ class App(_BaseWindow):
     def _ctrl_v(self, event=None) -> str | None:
         # Non intercettare Ctrl+V dentro campi di testo editabili (entry)
         w = self.focus_get()
-        if isinstance(w, tk.Entry) and str(w.cget("state")) == "normal":
+        if isinstance(w, (tk.Entry, tk.Text)) and str(w.cget("state")) == "normal":
             return None
         self.incolla()
         return "break"
@@ -331,6 +423,7 @@ class App(_BaseWindow):
         self.clipboard_append(testo)
         self.update()
         self._stato("Markdown copiato negli appunti.")
+        self._toast("✓ Copiato negli appunti!")
 
     def _apri(self, percorso: Path) -> None:
         try:
@@ -356,10 +449,12 @@ class App(_BaseWindow):
 
     def _aggiorna_watch_ui(self) -> None:
         if self.watcher.attivo:
-            self.btn_watch.configure(text="⏸  Pausa Watch  (attivo)")
+            self.btn_watch.configure(text="  Pausa Watch  (attivo)", image=self._ico("pausa"),
+                                     compound="left")
             self._stato("Watch attivo: i file messi in ingresso vengono convertiti.")
         else:
-            self.btn_watch.configure(text="▶  Avvia Watch  (in pausa)")
+            self.btn_watch.configure(text="  Avvia Watch  (in pausa)", image=self._ico("play"),
+                                     compound="left")
             self._stato("Watch in pausa.")
 
     # ------------------------------------------------------- impostazioni
@@ -409,6 +504,10 @@ class App(_BaseWindow):
         del self.cronologia[200:]
         if r.ok:
             self.n_ok += 1
+            if r.sorgente in self.conv.sorgenti_appunti:
+                self.appunto_nuovo = r.destinazione     # il precedente torna neutro
+                self._scroll_top = True
+                self._toast("✓ Testo incollato dagli appunti!")
             self._anteprima(r)
         else:
             self.n_err += 1
@@ -420,9 +519,17 @@ class App(_BaseWindow):
     def _anteprima(self, r: Risultato) -> None:
         self._mostra_md(r.destinazione, f"{r.sorgente.name}  →  {r.destinazione.name}")
 
+    def _aggiorna_header(self) -> None:
+        ocra = self.ultimo_md is not None and self.ultimo_md == self.appunto_nuovo
+        self.barra.configure(fg_color=OCRA if ocra else "transparent")
+        self.lbl_file.configure(text_color=OCRA_TXT if ocra else TXT)
+        self.preview.configure(fg_color=OCRA_PREV if ocra else PREV_BG,
+                               text_color=OCRA_PREV_TXT if ocra else TXT)
+
     def _mostra_md(self, percorso: Path, titolo: str | None = None) -> None:
         self.ultimo_md = percorso
         self.lbl_file.configure(text=titolo or percorso.name)
+        self._aggiorna_header()
         try:
             testo = percorso.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
@@ -437,6 +544,7 @@ class App(_BaseWindow):
         """Pulisce solo l'anteprima: i file su disco restano intatti."""
         self.ultimo_md = None
         self.lbl_file.configure(text="Nessuna conversione")
+        self._aggiorna_header()
         self._set_preview("")
         self._ridisegna_files()
 
@@ -462,42 +570,53 @@ class App(_BaseWindow):
             return
         for i, (p, m) in enumerate(voci[:300]):
             sel = self.ultimo_md is not None and p == self.ultimo_md
+            app_ = (p == self.appunto_nuovo)
+            if app_:
+                fondo, col_nome, col_info = OCRA, OCRA_TXT, OCRA_TXT
+            else:
+                fondo = ("#E8F2FB", "#1E3447") if sel else ("#F6F6F6", "#262626")
+                col_nome, col_info = TXT, (OK_COL if i == 0 else MUTED)
             riga = ctk.CTkFrame(
-                self.lista_md, corner_radius=8,
-                fg_color=("#E8F2FB", "#1E3447") if sel else ("#F6F6F6", "#262626"),
+                self.lista_md, corner_radius=8, fg_color=fondo,
                 border_width=2 if (sel or i == 0) else 0,
                 border_color=ACCENT if sel else ("#0F7B0F", "#6CCB5F"))
             riga.grid(row=i, column=0, sticky="ew", pady=3, padx=2)
             riga.grid_columnconfigure(0, weight=1)
-            nome = ctk.CTkLabel(riga, text=p.name, anchor="w", font=(FONT, 12, "bold"),
-                                cursor="hand2")
+            nome = ctk.CTkLabel(riga, text=p.name, anchor="w", font=(FONT, 11, "bold"),
+                                cursor="hand2", text_color=col_nome)
             nome.grid(row=0, column=0, sticky="ew", padx=(8, 4), pady=(6, 0))
-            info = time.strftime("%d/%m %H:%M", time.localtime(m))
+            if app_:
+                info = f"Appunti · {ora_appunti(p)}"
+            else:
+                info = time.strftime("%d/%m %H:%M", time.localtime(m))
             if i == 0:
                 info = "● Ultimo  ·  " + info
-            sotto = ctk.CTkLabel(riga, text=info, anchor="w", font=(FONT, 10),
-                                 text_color=OK_COL if i == 0 else MUTED)
+            sotto = ctk.CTkLabel(riga, text=info, anchor="w", font=(FONT, 10, "bold" if app_ else "normal"),
+                                 text_color=col_info)
             sotto.grid(row=1, column=0, sticky="ew", padx=(8, 4), pady=(0, 6))
             for w in (riga, nome, sotto):
                 w.bind("<Button-1>", lambda e, x=p: self._mostra_md(x))
-            b_copia = ctk.CTkButton(riga, text="📋", width=32, height=30,
-                                    fg_color=("#E6E6E6", "#383838"),
-                                    hover_color=("#D6D6D6", "#454545"),
-                                    text_color=("#1A1A1A", "#F2F2F2"))
-            b_copia.configure(command=lambda x=p, b=b_copia: self.copia_file(x, b))
-            b_copia.grid(row=0, column=2, rowspan=2, padx=2, pady=4)
-            ctk.CTkButton(riga, text="Apri", width=48, height=30, font=(FONT, 12),
-                          fg_color=("#E6E6E6", "#383838"),
-                          hover_color=("#D6D6D6", "#454545"),
-                          text_color=("#1A1A1A", "#F2F2F2"),
+            ctk.CTkButton(riga, text=" Apri", width=68, height=30, font=(FONT, 12),
+                          image=self._ico("apri"), compound="left",
+                          fg_color=BTN2, hover_color=BTN2_H, text_color=TXT,
                           command=lambda x=p: self._apri(x)).grid(
                 row=0, column=1, rowspan=2, padx=(2, 2), pady=4)
-            ctk.CTkButton(riga, text="🗑️", width=32, height=30,
-                          fg_color=("#E6E6E6", "#383838"),
-                          hover_color=("#F4B6B0", "#7A2A25"),
-                          text_color=("#1A1A1A", "#F2F2F2"),
+            b_copia = ctk.CTkButton(riga, text="", width=32, height=30,
+                                    image=self._ico("copia"),
+                                    fg_color=BTN2, hover_color=BTN2_H, text_color=TXT)
+            b_copia.configure(command=lambda x=p, b=b_copia: self.copia_file(x, b))
+            b_copia.grid(row=0, column=2, rowspan=2, padx=2, pady=4)
+            ctk.CTkButton(riga, text="", width=32, height=30, image=self._ico("elimina"),
+                          fg_color=BTN2, hover_color=("#F4B6B0", "#7A2A25"), text_color=TXT,
                           command=lambda x=p: self.elimina_file(x)).grid(
                 row=0, column=3, rowspan=2, padx=(2, 6), pady=4)
+        if self._scroll_top:
+            self._scroll_top = False
+            self.lista_md.update_idletasks()
+            try:
+                self.lista_md._parent_canvas.yview_moveto(0)
+            except Exception:  # noqa: BLE001
+                pass
 
     def copia_file(self, p: Path, bottone=None) -> bool:
         try:
@@ -509,9 +628,11 @@ class App(_BaseWindow):
         self.clipboard_append(testo)
         self.update()
         self._stato(f"Copiato negli appunti: {p.name}")
+        self._toast("✓ Copiato negli appunti!")
         if bottone is not None:
-            bottone.configure(text="✔")
-            self.after(1200, lambda: bottone.winfo_exists() and bottone.configure(text="📋"))
+            bottone.configure(image=self._ico("ok"))
+            self.after(1200, lambda: bottone.winfo_exists()
+                       and bottone.configure(image=self._ico("copia")))
         return True
 
     def elimina_file(self, p: Path, conferma: bool = True) -> bool:
@@ -524,6 +645,8 @@ class App(_BaseWindow):
             messagebox.showerror(APP_TITLE, f"Impossibile eliminare:\n{exc}")
             return False
         logging.info("Eliminato %s", p)
+        if self.appunto_nuovo == p:
+            self.appunto_nuovo = None
         if self.ultimo_md == p:
             self.svuota_anteprima()
         else:

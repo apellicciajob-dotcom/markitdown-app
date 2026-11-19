@@ -25,7 +25,7 @@ $mode = if ($OneFile) { "--onefile" } else { "--onedir" }
 $args = @(
     "-m", "PyInstaller", "--noconfirm", "--clean", "--noconsole", $mode,
     "--name", "MarkItDownApp",
-    "--icon", "assets\icon.ico",
+    "--icon", "assets\apexcore_icon.ico",
     "--add-data", "assets;assets",
     "--collect-all", "markitdown",
     "--collect-all", "magika",

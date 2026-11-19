@@ -179,6 +179,7 @@ class Convertitore:
         self._md_lock = threading.Lock()       # istanza MarkItDown
         self._md = None
         self._elaborati: set[tuple[str, int, int]] = set()
+        self.sorgenti_appunti: set[Path] = set()   # creati da 'Incolla dagli appunti' (sessione)
 
     # -- cartelle ----------------------------------------------------------
     @property
@@ -326,6 +327,7 @@ class Convertitore:
                     break
                 except FileExistsError:
                     n += 1
+            self.sorgenti_appunti.add(p)
         return self.converti_file(p)
 
     def converti_ingresso(self) -> list[Risultato]:

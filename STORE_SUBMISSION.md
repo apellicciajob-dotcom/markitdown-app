@@ -3,7 +3,7 @@
 Prerequisito: account sviluppatore su [Partner Center](https://partner.microsoft.com/dashboard) (una tantum).
 
 1. **Prenota il nome dell'app**
-   Partner Center → *Apps and games* → *New product* → *MSIX or PWA app* → riserva il nome (es. "MarkItDown App").
+   Partner Center → *Apps and games* → *New product* → *MSIX or PWA app* → riserva il nome (es. "ApexCore - MarkItDown Avanzato").
 
 2. **Copia l'identità del prodotto**
    *Product management* → *Product identity*: annota

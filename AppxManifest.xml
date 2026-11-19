@@ -17,7 +17,7 @@
             ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>MarkItDown App</DisplayName>
+    <DisplayName>ApexCore - MarkItDown Avanzato</DisplayName>
     <PublisherDisplayName>Il tuo nome editore</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -35,7 +35,7 @@
     <Application Id="MarkItDownApp" Executable="MarkItDownApp.exe"
                  EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="MarkItDown App"
+        DisplayName="ApexCore - MarkItDown Avanzato"
         Description="Converti PDF, Word, Excel, PowerPoint, EPUB, testo e log in Markdown."
         BackgroundColor="#0067C0"
         Square150x150Logo="Assets\Square150x150Logo.png"
