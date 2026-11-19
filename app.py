@@ -76,7 +76,7 @@ class App(_BaseWindow):
 
         self.title(APP_TITLE)
         self.geometry("1380x760")
-        self.minsize(1180, 620)
+        self.minsize(1240, 620)
         self.configure(fg_color=BG)
         self._icona()
         self._costruisci()
@@ -166,7 +166,7 @@ class App(_BaseWindow):
         t_set = self.tabs.add("Impostazioni")
 
         # --- colonna destra: file in conversioni/ ---
-        dx = self._card(self, width=330)
+        dx = self._card(self, width=370)
         dx.grid(row=0, column=2, sticky="ns", padx=(8, 16), pady=16)
         dx.grid_propagate(False)
         dx.grid_columnconfigure(0, weight=1)
@@ -199,14 +199,10 @@ class App(_BaseWindow):
                                        text_color=("#FFFFFF", "#000000"),
                                        hover_color=("#005A9E", "#6CD0FF"))
         self.btn_copia.grid(row=0, column=1, padx=(8, 0))
-        ctk.CTkButton(barra, text="Apri file", width=90, height=32,
-                      fg_color=("#E6E6E6", "#383838"), hover_color=("#D6D6D6", "#454545"),
-                      text_color=("#1A1A1A", "#F2F2F2"),
-                      command=self.apri_ultimo).grid(row=0, column=2, padx=(8, 0))
         ctk.CTkButton(barra, text="Svuota", width=80, height=32,
                       fg_color=("#E6E6E6", "#383838"), hover_color=("#D6D6D6", "#454545"),
                       text_color=("#1A1A1A", "#F2F2F2"),
-                      command=self.svuota_anteprima).grid(row=0, column=3, padx=(8, 0))
+                      command=self.svuota_anteprima).grid(row=0, column=2, padx=(8, 0))
         self.preview = ctk.CTkTextbox(t_prev, font=("Cascadia Mono", 13), wrap="word",
                                       fg_color=("#FAFAFA", "#1F1F1F"), corner_radius=8)
         self.preview.grid(row=1, column=0, sticky="nsew")
@@ -335,10 +331,6 @@ class App(_BaseWindow):
         self.clipboard_append(testo)
         self.update()
         self._stato("Markdown copiato negli appunti.")
-
-    def apri_ultimo(self) -> None:
-        if self.ultimo_md and self.ultimo_md.exists():
-            self._apri(self.ultimo_md)
 
     def _apri(self, percorso: Path) -> None:
         try:
@@ -493,13 +485,19 @@ class App(_BaseWindow):
                                     hover_color=("#D6D6D6", "#454545"),
                                     text_color=("#1A1A1A", "#F2F2F2"))
             b_copia.configure(command=lambda x=p, b=b_copia: self.copia_file(x, b))
-            b_copia.grid(row=0, column=1, rowspan=2, padx=2, pady=4)
+            b_copia.grid(row=0, column=2, rowspan=2, padx=2, pady=4)
+            ctk.CTkButton(riga, text="Apri", width=48, height=30, font=(FONT, 12),
+                          fg_color=("#E6E6E6", "#383838"),
+                          hover_color=("#D6D6D6", "#454545"),
+                          text_color=("#1A1A1A", "#F2F2F2"),
+                          command=lambda x=p: self._apri(x)).grid(
+                row=0, column=1, rowspan=2, padx=(2, 2), pady=4)
             ctk.CTkButton(riga, text="🗑️", width=32, height=30,
                           fg_color=("#E6E6E6", "#383838"),
                           hover_color=("#F4B6B0", "#7A2A25"),
                           text_color=("#1A1A1A", "#F2F2F2"),
                           command=lambda x=p: self.elimina_file(x)).grid(
-                row=0, column=2, rowspan=2, padx=(2, 6), pady=4)
+                row=0, column=3, rowspan=2, padx=(2, 6), pady=4)
 
     def copia_file(self, p: Path, bottone=None) -> bool:
         try:
